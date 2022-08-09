@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys
 import ssl
 import certifi
@@ -13,10 +14,18 @@ from colorama import Fore, Back, Style
 # https://github.com/azure/azure-iot-cli-extension#installation
 # Example: az iot hub generate-sas-token --hub-name YOUR_IOT_HUB_NAME --device-id YOUR_DEVICE_ID --key-type primary --duration 3600
 try:
-    f = open("sas.token", "r")
+    f = open("sastoken.txt", "r")
     SAS_TOKEN = f.readline()
 except FileNotFoundError:
-    print('File "sas.token" not found.\nCreate it and place the SAS token on the first line.')
+    print('File "sastoken.txt" not found.\nCreate it and place the SAS token on the first line.')
+    sys.exit(404)
+
+
+try:
+    f = open("hostname.txt", "r")
+    hostname = f.readline()
+except FileNotFoundError:
+    print('File "hosname.txt" not found.\ncreate it..')
     sys.exit(404)
 
 class DirectMethod:
@@ -95,22 +104,29 @@ def on_publish(client, userdata, result):
 # Always use MQTT v3.1.1 with Azure IoT Hub.
 # MQTT v3.1 won't be able to connect at all (Paho error 3 or 5).
 client = mqtt.Client(client_id='yolo', clean_session=True, userdata=None, protocol=mqtt.MQTTv311, transport='tcp')
+
+# client = mqtt.Client(client_id='yolo', userdata=None, protocol=mqtt.MQTTv5, transport='tcp')
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_publish = on_publish
 
-# Connect to Azure IoT Hub
+# Connect to Azure IoT Hub.
 ca_bundle = certifi.where()
 print(f'Using CA bundle provided by certifi, version {certifi.__version__}.')
 # If you don't specify your own CA bundle PEM file, Python will
 # attempt to use the default CA on the system.
 client.tls_set(ca_certs=ca_bundle, tls_version=ssl.PROTOCOL_TLSv1_2)
 client.tls_insecure_set(False)
-client.username_pw_set(username='poorlyfundedskynet.azure-devices.net/yolo/?api-version=2018-06-30', password=SAS_TOKEN)
+
+#hostname = "foo.azure-devices.net"
+username = hostname + "/yolo/?api-version=2021-04-12"
+
+
+client.username_pw_set(username=username, password=SAS_TOKEN)
 #client._ssl_context.load_verify_locations(cafile='badssl.crl.pem')
 #client._ssl_context.load_verify_locations(cafile='microsoftca4.crl.pem')
 #client._ssl_context.verify_flags = ssl.VERIFY_CRL_CHECK_LEAF
-client.connect('poorlyfundedskynet.azure-devices.net', 8883, 60)
+client.connect(hostname, 8883, 60)
 #client.connect('revoked.badssl.com', 443, 60)
 print('------------ TLS session info ----------')
 print(client._ssl_context.protocol)
@@ -124,7 +140,7 @@ print('----------------------------------------')
 #client.loop_forever()
 client.loop_start()
 
-SLEEP_DELAY = 500
+SLEEP_DELAY = 5
 while True:
     time.sleep(2)
     print('Publishing message to broker..')
